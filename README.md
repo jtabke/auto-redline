@@ -11,7 +11,8 @@ Automatic PDF redline generator that compares two PDF files and produces visual 
 
 ## Requirements
 
-- **ImageMagick 6** (`convert`, `composite`, `montage`, `mogrify`, `identify`)
+- **ImageMagick 6 or 7** (`convert`, `composite`, `montage`, `mogrify`, `identify`)
+  - ImageMagick is licensed under the [ImageMagick License](https://imagemagick.org/script/license.php)
   - For ImageMagick 7, replace `convert` with `magick` in the script (lines 22-23)
 - Bash 4.0+
 
@@ -71,6 +72,7 @@ chmod +x pdf-diff-overlay.sh
 ```
 
 This compares `A.pdf` (old version) with `B.pdf` (new version) and outputs:
+
 - `diff_out/overlay.diff.pdf` - B with red additions and blue deletions
 - `diff_out/side-by-side.pdf` - Three-panel comparison
 
@@ -82,13 +84,13 @@ DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./pdf-diff-overlay.sh old.pdf
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DPI` | 300 | Rasterization DPI (higher = better quality, slower) |
-| `THRESH` | 80 | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
-| `BLUR` | 0x1 | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2) |
-| `OUT` | diff_out | Output directory for all generated files |
-| `SXS` | 1 | Generate side-by-side PDF (1=yes, 0=no) |
+| Variable | Default  | Description                                                      |
+| -------- | -------- | ---------------------------------------------------------------- |
+| `DPI`    | 300      | Rasterization DPI (higher = better quality, slower)              |
+| `THRESH` | 80       | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
+| `BLUR`   | 0x1      | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2)         |
+| `OUT`    | diff_out | Output directory for all generated files                         |
+| `SXS`    | 1        | Generate side-by-side PDF (1=yes, 0=no)                          |
 
 ## Output Files
 
@@ -102,6 +104,7 @@ DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./pdf-diff-overlay.sh old.pdf
 ### Intermediate Files
 
 The output directory contains per-page intermediate files:
+
 - `page-{N}.Amask.png` / `page-{N}.Bmask.png` - Binary ink masks
 - `page-{N}.add.mask.png` / `page-{N}.del.mask.png` - Addition/deletion masks
 - `page-{N}.add.overlay.png` / `page-{N}.del.overlay.png` - Colorized overlays
@@ -140,16 +143,19 @@ The output directory contains per-page intermediate files:
 ## Examples
 
 ### Compare legal documents at high quality
+
 ```bash
 DPI=600 THRESH=85 ./pdf-diff-overlay.sh contract_v1.pdf contract_v2.pdf
 ```
 
 ### Quick draft comparison without side-by-side
+
 ```bash
 DPI=150 SXS=0 ./pdf-diff-overlay.sh draft1.pdf draft2.pdf
 ```
 
 ### Process scanned documents with noise
+
 ```bash
 THRESH=70 BLUR=0x2 ./pdf-diff-overlay.sh scan_old.pdf scan_new.pdf
 ```
@@ -157,27 +163,32 @@ THRESH=70 BLUR=0x2 ./pdf-diff-overlay.sh scan_old.pdf scan_new.pdf
 ## Troubleshooting
 
 ### ImageMagick 7 Users
+
 Change lines 22-23 from `convert` to `magick`:
+
 ```bash
 magick -density "$DPI" ... "$A" "$RA/page-%05d.png"
 magick -density "$DPI" ... "$B" "$RB/page-%05d.png"
 ```
 
 ### No differences detected
+
 - Try lowering `THRESH` (e.g., 60-70)
 - Check if PDFs are identical or only differ in metadata
 - Increase `DPI` for better detection of small changes
 
 ### Too many false positives
+
 - Increase `THRESH` (e.g., 85-95)
 - Increase `BLUR` (e.g., 0x1.5 or 0x2)
 - Ensure PDFs are vector-based, not scanned images
 
 ### Memory issues with large PDFs
+
 - Reduce `DPI` (e.g., 150 or 200)
 - Process subsets of pages manually
 - Increase available system memory
 
 ## License
 
-See repository license.
+This tool requires ImageMagick as an external dependency. ImageMagick is licensed under the [ImageMagick License](https://imagemagick.org/script/license.php). Users must install ImageMagick separately according to its license terms.
