@@ -199,7 +199,9 @@ log_info "[1/5] Rasterizing PDFs at ${DPI} DPI…"
 "$CONVERT_CMD" -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RASTER_DIR_B/page-%05d.png"
 
 log_info "[2/5] Normalizing canvas sizes page-by-page…"
-# Pad each pair to the max WxH so pixels line up
+page_count=$(find "$RASTER_DIR_A" -name "*.png" | wc -l)
+current=0
+
 for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
     q="$RASTER_DIR_B/$base"
@@ -211,7 +213,10 @@ for p in "$RASTER_DIR_A"/*.png; do
         mogrify -background white -gravity northwest -extent "${W}x${H}" "$p"
         mogrify -background white -gravity northwest -extent "${W}x${H}" "$q"
     fi
+    ((current++))
+    printf "\r  Progress: %d/%d pages normalized" "$current" "$page_count" >&2
 done
+printf "\n" >&2
 
 log_info "[3/5] Computing directional diffs (red=new, blue=removed)…"
 
@@ -234,12 +239,19 @@ done
 if command -v parallel &> /dev/null; then
     export -f process_pair
     export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY
+    total_pages=${#pages_to_process[@]}
+    log_info "  Processing $total_pages pages in parallel..."
     printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
 else
+    total_pages=${#pages_to_process[@]}
+    current=0
     for page_info in "${pages_to_process[@]}"; do
         IFS='|' read -r p q base <<< "$page_info"
         process_pair "$p" "$q" "$base"
+        ((current++))
+        printf "\r  Progress: %d/%d pages processed" "$current" "$total_pages" >&2
     done
+    printf "\n" >&2
 fi
 
 log_info "[4/5] Assembling PDFs…"
