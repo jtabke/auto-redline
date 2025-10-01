@@ -7,6 +7,26 @@ set -euo pipefail
 A="${1:?usage: $0 A.pdf B.pdf}"
 B="${2:?usage: $0 A.pdf B.pdf}"
 
+if [[ ! -f "$A" ]]; then
+    echo "Error: File '$A' not found" >&2
+    exit 1
+fi
+
+if [[ ! -f "$B" ]]; then
+    echo "Error: File '$B' not found" >&2
+    exit 1
+fi
+
+if ! file "$A" | grep -q "PDF"; then
+    echo "Error: '$A' is not a PDF file" >&2
+    exit 1
+fi
+
+if ! file "$B" | grep -q "PDF"; then
+    echo "Error: '$B' is not a PDF file" >&2
+    exit 1
+fi
+
 DPI="${DPI:-300}"      # rasterization DPI
 THRESH="${THRESH:-80}" # 60–90 typical; higher = stricter "ink"
 BLUR="${BLUR:-0x1}"    # 0x0–0x1 to reduce AA noise
