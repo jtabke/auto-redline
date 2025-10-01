@@ -16,6 +16,17 @@ check_dependency() {
     fi
 }
 
+detect_imagemagick_version() {
+    if command -v magick &> /dev/null; then
+        echo "magick"
+    elif command -v convert &> /dev/null; then
+        echo "convert"
+    else
+        log_error "Neither 'magick' (IM7) nor 'convert' (IM6) found. Please install ImageMagick."
+        exit 1
+    fi
+}
+
 process_pair() {
     local p="$1"
     local q="$2"
@@ -24,30 +35,30 @@ process_pair() {
     # If one side missing, synthesize a white canvas of the other's size
     if [[ ! -f "$p" && -f "$q" ]]; then
         read w h < <(identify -format "%w %h" "$q")
-        convert -size "${w}x${h}" xc:white "$p"
+        "$CONVERT_CMD" -size "${w}x${h}" xc:white "$p"
     elif [[ -f "$p" && ! -f "$q" ]]; then
         read w h < <(identify -format "%w %h" "$p")
-        convert -size "${w}x${h}" xc:white "$q"
+        "$CONVERT_CMD" -size "${w}x${h}" xc:white "$q"
     elif [[ ! -f "$p" && ! -f "$q" ]]; then
         return 0
     fi
 
     # Binary "ink" masks (white where ink is)
-    convert "$p" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
-    convert "$q" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
+    "$CONVERT_CMD" "$p" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
+    "$CONVERT_CMD" "$q" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
 
     # additions = B∖A = B & !A  (boolean via Multiply; no alpha tricks)
-    convert "$OUT/$base.Amask.png" -negate "$OUT/$base.Anot.png"
-    convert "$OUT/$base.Bmask.png" "$OUT/$base.Anot.png" -compose Multiply -composite "$OUT/$base.add.mask.png"
+    "$CONVERT_CMD" "$OUT/$base.Amask.png" -negate "$OUT/$base.Anot.png"
+    "$CONVERT_CMD" "$OUT/$base.Bmask.png" "$OUT/$base.Anot.png" -compose Multiply -composite "$OUT/$base.add.mask.png"
 
     # deletions = A∖B = A & !B
-    convert "$OUT/$base.Bmask.png" -negate "$OUT/$base.Bnot.png"
-    convert "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
+    "$CONVERT_CMD" "$OUT/$base.Bmask.png" -negate "$OUT/$base.Bnot.png"
+    "$CONVERT_CMD" "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
 
     # Clean & colorize (re-binarize helps; small fuzz aids transparency)
-    convert "$OUT/$base.add.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
+    "$CONVERT_CMD" "$OUT/$base.add.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
         -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_ADD" -opaque white -transparent black "$OUT/$base.add.overlay.png"
-    convert "$OUT/$base.del.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
+    "$CONVERT_CMD" "$OUT/$base.del.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
         -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_DELETE" -opaque white -transparent black "$OUT/$base.del.overlay.png"
 
     # Compose overlays on NEW page (B): blue first, red on top (so red wins at overlaps)
@@ -101,7 +112,9 @@ COLOR_ADD="red"
 COLOR_DELETE="blue"
 MONTAGE_GEOMETRY="+12+12"
 
-check_dependency convert
+CONVERT_CMD=$(detect_imagemagick_version)
+
+check_dependency "$CONVERT_CMD"
 check_dependency composite
 check_dependency montage
 check_dependency mogrify
@@ -119,9 +132,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 log_info "[1/5] Rasterizing PDFs at ${DPI} DPI…"
-# IM6 'convert'; for IM7 use 'magick' instead of 'convert'
-convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RASTER_DIR_A/page-%05d.png"
-convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RASTER_DIR_B/page-%05d.png"
+"$CONVERT_CMD" -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RASTER_DIR_A/page-%05d.png"
+"$CONVERT_CMD" -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RASTER_DIR_B/page-%05d.png"
 
 log_info "[2/5] Normalizing canvas sizes page-by-page…"
 # Pad each pair to the max WxH so pixels line up
@@ -163,7 +175,7 @@ overlay_pages=("$OUT"/page-*.overlay.png)
 if ((${#overlay_pages[@]})); then
     # Keep page order stable via sort -V
     mapfile -t overlay_pages < <(printf '%s\n' "${overlay_pages[@]}" | sort -V)
-    convert -units PixelsPerInch -density "$DPI" "${overlay_pages[@]}" -compress Zip "$OUT/overlay.diff.pdf"
+    "$CONVERT_CMD" -units PixelsPerInch -density "$DPI" "${overlay_pages[@]}" -compress Zip "$OUT/overlay.diff.pdf"
     log_info "  -> $OUT/overlay.diff.pdf"
 else
     log_info "  (no overlay pages found)"
@@ -174,7 +186,7 @@ if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
     sxs_pages=("$OUT"/page-*.sxs.png)
     if ((${#sxs_pages[@]})); then
         mapfile -t sxs_pages < <(printf '%s\n' "${sxs_pages[@]}" | sort -V)
-        convert -units PixelsPerInch -density "$DPI" "${sxs_pages[@]}" -compress Zip "$OUT/side-by-side.pdf"
+        "$CONVERT_CMD" -units PixelsPerInch -density "$DPI" "${sxs_pages[@]}" -compress Zip "$OUT/side-by-side.pdf"
         log_info "  -> $OUT/side-by-side.pdf"
     fi
 fi
