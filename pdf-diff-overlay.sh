@@ -33,8 +33,8 @@ process_pair() {
     fi
 
     # Binary "ink" masks (white where ink is)
-    convert "$p" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
-    convert "$q" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
+    convert "$p" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
+    convert "$q" -colorspace gray -white-threshold "$WHITE_THRESHOLD" -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
 
     # additions = B∖A = B & !A  (boolean via Multiply; no alpha tricks)
     convert "$OUT/$base.Amask.png" -negate "$OUT/$base.Anot.png"
@@ -45,10 +45,10 @@ process_pair() {
     convert "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
 
     # Clean & colorize (re-binarize helps; small fuzz aids transparency)
-    convert "$OUT/$base.add.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
-        -fuzz 1% -fill red -opaque white -transparent black "$OUT/$base.add.overlay.png"
-    convert "$OUT/$base.del.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
-        -fuzz 1% -fill blue -opaque white -transparent black "$OUT/$base.del.overlay.png"
+    convert "$OUT/$base.add.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
+        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_ADD" -opaque white -transparent black "$OUT/$base.add.overlay.png"
+    convert "$OUT/$base.del.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
+        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_DELETE" -opaque white -transparent black "$OUT/$base.del.overlay.png"
 
     # Compose overlays on NEW page (B): blue first, red on top (so red wins at overlaps)
     composite "$OUT/$base.del.overlay.png" "$q" "$OUT/$base.tmp.png"
@@ -57,7 +57,7 @@ process_pair() {
 
     # Optional side-by-side strip
     if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
-        montage "$p" "$q" "$OUT/$base.overlay.png" -tile 3x1 -geometry +12+12 "$OUT/$base.sxs.png"
+        montage "$p" "$q" "$OUT/$base.overlay.png" -tile 3x1 -geometry "$MONTAGE_GEOMETRY" "$OUT/$base.sxs.png"
     fi
 }
 
@@ -92,6 +92,14 @@ THRESH="${THRESH:-80}" # 60–90 typical; higher = stricter "ink"
 BLUR="${BLUR:-0x1}"    # 0x0–0x1 to reduce AA noise
 OUT="${OUT:-diff_out}" # output dir
 GENERATE_SIDE_BY_SIDE="${SXS:-1}"        # 1 = also make side-by-side PDF
+
+WHITE_THRESHOLD="95%"
+BINARIZE_THRESHOLD="50%"
+MORPHOLOGY_RADIUS="disk:1"
+TRANSPARENCY_FUZZ="1%"
+COLOR_ADD="red"
+COLOR_DELETE="blue"
+MONTAGE_GEOMETRY="+12+12"
 
 check_dependency convert
 check_dependency composite
