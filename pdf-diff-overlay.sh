@@ -103,6 +103,13 @@ RASTER_DIR_A="__ra"
 RASTER_DIR_B="__rb"
 mkdir -p "$OUT" "$RASTER_DIR_A" "$RASTER_DIR_B"
 
+cleanup() {
+    log_info "Cleaning up temporary directories..."
+    rm -rf "$RASTER_DIR_A" "$RASTER_DIR_B"
+}
+
+trap cleanup EXIT INT TERM
+
 log_info "[1/5] Rasterizing PDFs at ${DPI} DPI…"
 # IM6 'convert'; for IM7 use 'magick' instead of 'convert'
 convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RASTER_DIR_A/page-%05d.png"
