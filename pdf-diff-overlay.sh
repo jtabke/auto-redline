@@ -16,6 +16,51 @@ check_dependency() {
     fi
 }
 
+process_pair() {
+    local p="$1"
+    local q="$2"
+    local base="$3"
+
+    # If one side missing, synthesize a white canvas of the other's size
+    if [[ ! -f "$p" && -f "$q" ]]; then
+        read w h < <(identify -format "%w %h" "$q")
+        convert -size "${w}x${h}" xc:white "$p"
+    elif [[ -f "$p" && ! -f "$q" ]]; then
+        read w h < <(identify -format "%w %h" "$p")
+        convert -size "${w}x${h}" xc:white "$q"
+    elif [[ ! -f "$p" && ! -f "$q" ]]; then
+        return 0
+    fi
+
+    # Binary "ink" masks (white where ink is)
+    convert "$p" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
+    convert "$q" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
+
+    # additions = B∖A = B & !A  (boolean via Multiply; no alpha tricks)
+    convert "$OUT/$base.Amask.png" -negate "$OUT/$base.Anot.png"
+    convert "$OUT/$base.Bmask.png" "$OUT/$base.Anot.png" -compose Multiply -composite "$OUT/$base.add.mask.png"
+
+    # deletions = A∖B = A & !B
+    convert "$OUT/$base.Bmask.png" -negate "$OUT/$base.Bnot.png"
+    convert "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
+
+    # Clean & colorize (re-binarize helps; small fuzz aids transparency)
+    convert "$OUT/$base.add.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
+        -fuzz 1% -fill red -opaque white -transparent black "$OUT/$base.add.overlay.png"
+    convert "$OUT/$base.del.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
+        -fuzz 1% -fill blue -opaque white -transparent black "$OUT/$base.del.overlay.png"
+
+    # Compose overlays on NEW page (B): blue first, red on top (so red wins at overlaps)
+    composite "$OUT/$base.del.overlay.png" "$q" "$OUT/$base.tmp.png"
+    composite "$OUT/$base.add.overlay.png" "$OUT/$base.tmp.png" "$OUT/$base.overlay.png"
+    rm -f "$OUT/$base.tmp.png"
+
+    # Optional side-by-side strip
+    if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
+        montage "$p" "$q" "$OUT/$base.overlay.png" -tile 3x1 -geometry +12+12 "$OUT/$base.sxs.png"
+    fi
+}
+
 # Usage: ./pdf-diff-overlay.sh A.pdf B.pdf
 # Env knobs:
 #   DPI=300 THRESH=80 BLUR=0x1 OUT=diff_out SXS=1 ./pdf-diff-overlay.sh A.pdf B.pdf
@@ -79,51 +124,6 @@ for p in "$RASTER_DIR_A"/*.png; do
 done
 
 log_info "[3/5] Computing directional diffs (red=new, blue=removed)…"
-# Helper to build masks, boolean math, colorize, and overlay
-process_pair() {
-    local p="$1" # A page png (may be missing)
-    local q="$2" # B page png (may be missing)
-    local base="$3"
-
-    # If one side missing, synthesize a white canvas of the other’s size
-    if [[ ! -f "$p" && -f "$q" ]]; then
-        read w h < <(identify -format "%w %h" "$q")
-        convert -size "${w}x${h}" xc:white "$p"
-    elif [[ -f "$p" && ! -f "$q" ]]; then
-        read w h < <(identify -format "%w %h" "$p")
-        convert -size "${w}x${h}" xc:white "$q"
-    elif [[ ! -f "$p" && ! -f "$q" ]]; then
-        return 0
-    fi
-
-    # Binary "ink" masks (white where ink is)
-    convert "$p" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Amask.png"
-    convert "$q" -colorspace gray -white-threshold 95% -blur "$BLUR" -threshold "${THRESH}%" -negate -type bilevel "$OUT/$base.Bmask.png"
-
-    # additions = B∖A = B & !A  (boolean via Multiply; no alpha tricks)
-    convert "$OUT/$base.Amask.png" -negate "$OUT/$base.Anot.png"
-    convert "$OUT/$base.Bmask.png" "$OUT/$base.Anot.png" -compose Multiply -composite "$OUT/$base.add.mask.png"
-
-    # deletions = A∖B = A & !B
-    convert "$OUT/$base.Bmask.png" -negate "$OUT/$base.Bnot.png"
-    convert "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
-
-    # Clean & colorize (re-binarize helps; small fuzz aids transparency)
-    convert "$OUT/$base.add.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
-        -fuzz 1% -fill red -opaque white -transparent black "$OUT/$base.add.overlay.png"
-    convert "$OUT/$base.del.mask.png" -morphology open disk:1 -morphology close disk:1 -threshold 50% \
-        -fuzz 1% -fill blue -opaque white -transparent black "$OUT/$base.del.overlay.png"
-
-    # Compose overlays on NEW page (B): blue first, red on top (so red wins at overlaps)
-    composite "$OUT/$base.del.overlay.png" "$q" "$OUT/$base.tmp.png"
-    composite "$OUT/$base.add.overlay.png" "$OUT/$base.tmp.png" "$OUT/$base.overlay.png"
-    rm -f "$OUT/$base.tmp.png"
-
-    # Optional side-by-side strip
-    if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
-        montage "$p" "$q" "$OUT/$base.overlay.png" -tile 3x1 -geometry +12+12 "$OUT/$base.sxs.png"
-    fi
-}
 
 # Process pages present in A (pairwise)
 for p in "$RASTER_DIR_A"/*.png; do
