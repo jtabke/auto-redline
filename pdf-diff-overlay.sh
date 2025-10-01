@@ -107,9 +107,9 @@ check_dependency montage
 check_dependency mogrify
 check_dependency identify
 
-RASTER_DIR_A="__ra"
-RASTER_DIR_B="__rb"
-mkdir -p "$OUT" "$RASTER_DIR_A" "$RASTER_DIR_B"
+RASTER_DIR_A=$(mktemp -d -t pdf-diff-a.XXXXXX)
+RASTER_DIR_B=$(mktemp -d -t pdf-diff-b.XXXXXX)
+mkdir -p "$OUT"
 
 cleanup() {
     log_info "Cleaning up temporary directories..."
