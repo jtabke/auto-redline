@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+EXIT_SUCCESS=0
+EXIT_INVALID_ARGS=1
+EXIT_FILE_NOT_FOUND=2
+EXIT_INVALID_PDF=3
+EXIT_DEPENDENCY_MISSING=4
+
 log_info() {
     echo "$@"
 }
@@ -12,7 +18,7 @@ log_error() {
 check_dependency() {
     if ! command -v "$1" &> /dev/null; then
         log_error "Required command '$1' not found. Please install ImageMagick."
-        exit 1
+        exit $EXIT_DEPENDENCY_MISSING
     fi
 }
 
@@ -23,7 +29,7 @@ detect_imagemagick_version() {
         echo "convert"
     else
         log_error "Neither 'magick' (IM7) nor 'convert' (IM6) found. Please install ImageMagick."
-        exit 1
+        exit $EXIT_DEPENDENCY_MISSING
     fi
 }
 
@@ -80,22 +86,22 @@ B="${2:?usage: $0 A.pdf B.pdf}"
 
 if [[ ! -f "$A" ]]; then
     log_error "File '$A' not found"
-    exit 1
+    exit $EXIT_FILE_NOT_FOUND
 fi
 
 if [[ ! -f "$B" ]]; then
     log_error "File '$B' not found"
-    exit 1
+    exit $EXIT_FILE_NOT_FOUND
 fi
 
 if ! file "$A" | grep -q "PDF"; then
     log_error "'$A' is not a PDF file"
-    exit 1
+    exit $EXIT_INVALID_PDF
 fi
 
 if ! file "$B" | grep -q "PDF"; then
     log_error "'$B' is not a PDF file"
-    exit 1
+    exit $EXIT_INVALID_PDF
 fi
 
 DPI="${DPI:-300}"      # rasterization DPI
