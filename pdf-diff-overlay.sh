@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# set -euo pipefail
+set -euo pipefail
 
 # Usage: ./pdf-diff-overlay.sh A.pdf B.pdf
 # Env knobs:
