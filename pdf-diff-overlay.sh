@@ -46,7 +46,7 @@ DPI="${DPI:-300}"      # rasterization DPI
 THRESH="${THRESH:-80}" # 60–90 typical; higher = stricter "ink"
 BLUR="${BLUR:-0x1}"    # 0x0–0x1 to reduce AA noise
 OUT="${OUT:-diff_out}" # output dir
-SXS="${SXS:-1}"        # 1 = also make side-by-side PDF
+GENERATE_SIDE_BY_SIDE="${SXS:-1}"        # 1 = also make side-by-side PDF
 
 check_dependency convert
 check_dependency composite
@@ -54,20 +54,20 @@ check_dependency montage
 check_dependency mogrify
 check_dependency identify
 
-RA="__ra"
-RB="__rb"
-mkdir -p "$OUT" "$RA" "$RB"
+RASTER_DIR_A="__ra"
+RASTER_DIR_B="__rb"
+mkdir -p "$OUT" "$RASTER_DIR_A" "$RASTER_DIR_B"
 
 log_info "[1/5] Rasterizing PDFs at ${DPI} DPI…"
 # IM6 'convert'; for IM7 use 'magick' instead of 'convert'
-convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RA/page-%05d.png"
-convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RB/page-%05d.png"
+convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RASTER_DIR_A/page-%05d.png"
+convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RASTER_DIR_B/page-%05d.png"
 
 log_info "[2/5] Normalizing canvas sizes page-by-page…"
 # Pad each pair to the max WxH so pixels line up
-for p in "$RA"/*.png; do
+for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
-    q="$RB/$base"
+    q="$RASTER_DIR_B/$base"
     if [[ -f "$q" ]]; then
         read w h < <(identify -format "%w %h" "$p")
         read w2 h2 < <(identify -format "%w %h" "$q")
@@ -120,21 +120,21 @@ process_pair() {
     rm -f "$OUT/$base.tmp.png"
 
     # Optional side-by-side strip
-    if [[ "$SXS" == "1" ]]; then
+    if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
         montage "$p" "$q" "$OUT/$base.overlay.png" -tile 3x1 -geometry +12+12 "$OUT/$base.sxs.png"
     fi
 }
 
 # Process pages present in A (pairwise)
-for p in "$RA"/*.png; do
+for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
-    q="$RB/$base"
+    q="$RASTER_DIR_B/$base"
     process_pair "$p" "$q" "$base"
 done
 # Handle extra pages present only in B
-for q in "$RB"/*.png; do
+for q in "$RASTER_DIR_B"/*.png; do
     base=$(basename "$q")
-    p="$RA/$base"
+    p="$RASTER_DIR_A/$base"
     if [[ ! -f "$p" ]]; then
         process_pair "$p" "$q" "$base"
     fi
@@ -155,7 +155,7 @@ else
 fi
 
 # Side-by-side PDF (optional)
-if [[ "$SXS" == "1" ]]; then
+if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
     sxs_pages=("$OUT"/page-*.sxs.png)
     if ((${#sxs_pages[@]})); then
         mapfile -t sxs_pages < <(printf '%s\n' "${sxs_pages[@]}" | sort -V)
@@ -167,4 +167,4 @@ fi
 log_info "[5/5] Done."
 log_info "Outputs:"
 log_info "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
-[[ "$SXS" == "1" ]] && log_info "  - $OUT/side-by-side.pdf            (A | B | overlay)"
+[[ "$GENERATE_SIDE_BY_SIDE" == "1" ]] && log_info "  - $OUT/side-by-side.pdf            (A | B | overlay)"
