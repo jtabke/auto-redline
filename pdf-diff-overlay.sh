@@ -215,20 +215,32 @@ done
 
 log_info "[3/5] Computing directional diffs (red=new, blue=removed)…"
 
-# Process pages present in A (pairwise)
+# Build list of all pages to process
+pages_to_process=()
 for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
     q="$RASTER_DIR_B/$base"
-    process_pair "$p" "$q" "$base"
+    pages_to_process+=("$p|$q|$base")
 done
-# Handle extra pages present only in B
 for q in "$RASTER_DIR_B"/*.png; do
     base=$(basename "$q")
     p="$RASTER_DIR_A/$base"
     if [[ ! -f "$p" ]]; then
-        process_pair "$p" "$q" "$base"
+        pages_to_process+=("$p|$q|$base")
     fi
 done
+
+# Process pages in parallel using GNU parallel if available, otherwise fall back to serial
+if command -v parallel &> /dev/null; then
+    export -f process_pair
+    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY
+    printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
+else
+    for page_info in "${pages_to_process[@]}"; do
+        IFS='|' read -r p q base <<< "$page_info"
+        process_pair "$p" "$q" "$base"
+    done
+fi
 
 log_info "[4/5] Assembling PDFs…"
 shopt -s nullglob
