@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+log_info() {
+    echo "$@"
+}
+
+log_error() {
+    echo "Error: $@" >&2
+}
+
+check_dependency() {
+    if ! command -v "$1" &> /dev/null; then
+        log_error "Required command '$1' not found. Please install ImageMagick."
+        exit 1
+    fi
+}
+
 # Usage: ./pdf-diff-overlay.sh A.pdf B.pdf
 # Env knobs:
 #   DPI=300 THRESH=80 BLUR=0x1 OUT=diff_out SXS=1 ./pdf-diff-overlay.sh A.pdf B.pdf
@@ -8,22 +23,22 @@ A="${1:?usage: $0 A.pdf B.pdf}"
 B="${2:?usage: $0 A.pdf B.pdf}"
 
 if [[ ! -f "$A" ]]; then
-    echo "Error: File '$A' not found" >&2
+    log_error "File '$A' not found"
     exit 1
 fi
 
 if [[ ! -f "$B" ]]; then
-    echo "Error: File '$B' not found" >&2
+    log_error "File '$B' not found"
     exit 1
 fi
 
 if ! file "$A" | grep -q "PDF"; then
-    echo "Error: '$A' is not a PDF file" >&2
+    log_error "'$A' is not a PDF file"
     exit 1
 fi
 
 if ! file "$B" | grep -q "PDF"; then
-    echo "Error: '$B' is not a PDF file" >&2
+    log_error "'$B' is not a PDF file"
     exit 1
 fi
 
@@ -33,16 +48,22 @@ BLUR="${BLUR:-0x1}"    # 0x0–0x1 to reduce AA noise
 OUT="${OUT:-diff_out}" # output dir
 SXS="${SXS:-1}"        # 1 = also make side-by-side PDF
 
+check_dependency convert
+check_dependency composite
+check_dependency montage
+check_dependency mogrify
+check_dependency identify
+
 RA="__ra"
 RB="__rb"
 mkdir -p "$OUT" "$RA" "$RB"
 
-echo "[1/5] Rasterizing PDFs at ${DPI} DPI…"
+log_info "[1/5] Rasterizing PDFs at ${DPI} DPI…"
 # IM6 'convert'; for IM7 use 'magick' instead of 'convert'
 convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$A" "$RA/page-%05d.png"
 convert -density "$DPI" -units PixelsPerInch -background white -alpha remove -alpha off -colorspace sRGB "$B" "$RB/page-%05d.png"
 
-echo "[2/5] Normalizing canvas sizes page-by-page…"
+log_info "[2/5] Normalizing canvas sizes page-by-page…"
 # Pad each pair to the max WxH so pixels line up
 for p in "$RA"/*.png; do
     base=$(basename "$p")
@@ -57,7 +78,7 @@ for p in "$RA"/*.png; do
     fi
 done
 
-echo "[3/5] Computing directional diffs (red=new, blue=removed)…"
+log_info "[3/5] Computing directional diffs (red=new, blue=removed)…"
 # Helper to build masks, boolean math, colorize, and overlay
 process_pair() {
     local p="$1" # A page png (may be missing)
@@ -119,7 +140,7 @@ for q in "$RB"/*.png; do
     fi
 done
 
-echo "[4/5] Assembling PDFs…"
+log_info "[4/5] Assembling PDFs…"
 shopt -s nullglob
 
 # Overlay PDF (B with red/blue diff on each page)
@@ -128,9 +149,9 @@ if ((${#overlay_pages[@]})); then
     # Keep page order stable via sort -V
     mapfile -t overlay_pages < <(printf '%s\n' "${overlay_pages[@]}" | sort -V)
     convert -units PixelsPerInch -density "$DPI" "${overlay_pages[@]}" -compress Zip "$OUT/overlay.diff.pdf"
-    echo "  -> $OUT/overlay.diff.pdf"
+    log_info "  -> $OUT/overlay.diff.pdf"
 else
-    echo "  (no overlay pages found)"
+    log_info "  (no overlay pages found)"
 fi
 
 # Side-by-side PDF (optional)
@@ -139,11 +160,11 @@ if [[ "$SXS" == "1" ]]; then
     if ((${#sxs_pages[@]})); then
         mapfile -t sxs_pages < <(printf '%s\n' "${sxs_pages[@]}" | sort -V)
         convert -units PixelsPerInch -density "$DPI" "${sxs_pages[@]}" -compress Zip "$OUT/side-by-side.pdf"
-        echo "  -> $OUT/side-by-side.pdf"
+        log_info "  -> $OUT/side-by-side.pdf"
     fi
 fi
 
-echo "[5/5] Done."
-echo "Outputs:"
-echo "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
-[[ "$SXS" == "1" ]] && echo "  - $OUT/side-by-side.pdf            (A | B | overlay)"
+log_info "[5/5] Done."
+log_info "Outputs:"
+log_info "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
+[[ "$SXS" == "1" ]] && log_info "  - $OUT/side-by-side.pdf            (A | B | overlay)"
