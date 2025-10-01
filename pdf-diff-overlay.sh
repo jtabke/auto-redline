@@ -1,11 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+VERSION="1.0.0"
+
 EXIT_SUCCESS=0
 EXIT_INVALID_ARGS=1
 EXIT_FILE_NOT_FOUND=2
 EXIT_INVALID_PDF=3
 EXIT_DEPENDENCY_MISSING=4
+
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS] A.pdf B.pdf
+
+Compare two PDF files and generate a visual diff overlay showing additions (red)
+and deletions (blue).
+
+Arguments:
+  A.pdf                 Original PDF file
+  B.pdf                 Modified PDF file
+
+Options:
+  -h, --help           Show this help message and exit
+  -v, --version        Show version information and exit
+
+Environment Variables:
+  DPI                  Rasterization DPI (default: 300)
+  THRESH               Ink detection threshold, 60-90 typical (default: 80)
+  BLUR                 Blur to reduce AA noise (default: 0x1)
+  OUT                  Output directory (default: diff_out)
+  SXS                  Generate side-by-side PDF: 1=yes, 0=no (default: 1)
+
+Examples:
+  $0 old.pdf new.pdf
+  DPI=150 THRESH=70 $0 old.pdf new.pdf
+  OUT=my_diff SXS=0 $0 old.pdf new.pdf
+
+Output:
+  overlay.diff.pdf      Modified PDF with red (additions) and blue (deletions)
+  side-by-side.pdf      Three-column view: original | modified | overlay
+
+Exit Codes:
+  0    Success
+  1    Invalid arguments
+  2    File not found
+  3    Invalid PDF file
+  4    Missing dependency (ImageMagick)
+EOF
+}
+
+show_version() {
+    echo "pdf-diff-overlay version $VERSION"
+}
 
 log_info() {
     echo "$@"
@@ -81,6 +127,17 @@ process_pair() {
 # Usage: ./pdf-diff-overlay.sh A.pdf B.pdf
 # Env knobs:
 #   DPI=300 THRESH=80 BLUR=0x1 OUT=diff_out SXS=1 ./pdf-diff-overlay.sh A.pdf B.pdf
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_help
+    exit $EXIT_SUCCESS
+fi
+
+if [[ "${1:-}" == "-v" || "${1:-}" == "--version" ]]; then
+    show_version
+    exit $EXIT_SUCCESS
+fi
+
 A="${1:?usage: $0 A.pdf B.pdf}"
 B="${2:?usage: $0 A.pdf B.pdf}"
 
