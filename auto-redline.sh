@@ -50,7 +50,7 @@ EOF
 }
 
 show_version() {
-    echo "pdf-diff-overlay version $VERSION"
+    echo "auto-redline version $VERSION"
 }
 
 log_info() {
@@ -124,9 +124,9 @@ process_pair() {
     fi
 }
 
-# Usage: ./pdf-diff-overlay.sh A.pdf B.pdf
+# Usage: ./auto-redline.sh A.pdf B.pdf
 # Env knobs:
-#   DPI=300 THRESH=80 BLUR=0x1 OUT=diff_out SXS=1 ./pdf-diff-overlay.sh A.pdf B.pdf
+#   DPI=300 THRESH=80 BLUR=0x1 OUT=diff_out SXS=1 ./auto-redline.sh A.pdf B.pdf
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     show_help

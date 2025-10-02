@@ -1,4 +1,4 @@
-# PDF Diff Overlay Tool
+# auto-redline
 
 Automatic PDF redline generator that compares two PDF files and produces visual diff outputs highlighting additions and deletions.
 
@@ -60,7 +60,7 @@ magick -version
 ### Make Script Executable
 
 ```bash
-chmod +x pdf-diff-overlay.sh
+chmod +x auto-redline.sh
 ```
 
 ## Usage
@@ -68,7 +68,7 @@ chmod +x pdf-diff-overlay.sh
 ### Basic Usage
 
 ```bash
-./pdf-diff-overlay.sh A.pdf B.pdf
+./auto-redline.sh A.pdf B.pdf
 ```
 
 This compares `A.pdf` (old version) with `B.pdf` (new version) and outputs:
@@ -79,7 +79,7 @@ This compares `A.pdf` (old version) with `B.pdf` (new version) and outputs:
 ### Advanced Usage with Environment Variables
 
 ```bash
-DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./pdf-diff-overlay.sh old.pdf new.pdf
+DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./auto-redline.sh old.pdf new.pdf
 ```
 
 ## Configuration
@@ -145,19 +145,19 @@ The output directory contains per-page intermediate files:
 ### Compare legal documents at high quality
 
 ```bash
-DPI=600 THRESH=85 ./pdf-diff-overlay.sh contract_v1.pdf contract_v2.pdf
+DPI=600 THRESH=85 ./auto-redline.sh contract_v1.pdf contract_v2.pdf
 ```
 
 ### Quick draft comparison without side-by-side
 
 ```bash
-DPI=150 SXS=0 ./pdf-diff-overlay.sh draft1.pdf draft2.pdf
+DPI=150 SXS=0 ./auto-redline.sh draft1.pdf draft2.pdf
 ```
 
 ### Process scanned documents with noise
 
 ```bash
-THRESH=70 BLUR=0x2 ./pdf-diff-overlay.sh scan_old.pdf scan_new.pdf
+THRESH=70 BLUR=0x2 ./auto-redline.sh scan_old.pdf scan_new.pdf
 ```
 
 ## Troubleshooting
