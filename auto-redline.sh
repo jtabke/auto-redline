@@ -10,7 +10,7 @@ EXIT_INVALID_PDF=3
 EXIT_DEPENDENCY_MISSING=4
 
 show_help() {
-    cat << EOF
+    cat <<EOF
 Usage: $0 [OPTIONS] A.pdf B.pdf
 
 Compare two PDF files and generate a visual diff overlay showing additions (red)
@@ -30,6 +30,7 @@ Environment Variables:
   BLUR                 Blur to reduce AA noise (default: 0x1)
   OUT                  Output directory (default: diff_out)
   SXS                  Generate side-by-side PDF: 1=yes, 0=no (default: 1)
+  SHOW_LEGEND          Show color legend on overlay: 1=yes, 0=no (default: 1)
 
 Examples:
   $0 old.pdf new.pdf
@@ -62,21 +63,54 @@ log_error() {
 }
 
 check_dependency() {
-    if ! command -v "$1" &> /dev/null; then
+    if ! command -v "$1" &>/dev/null; then
         log_error "Required command '$1' not found. Please install ImageMagick."
         exit $EXIT_DEPENDENCY_MISSING
     fi
 }
 
 detect_imagemagick_version() {
-    if command -v magick &> /dev/null; then
+    if command -v magick &>/dev/null; then
         echo "magick"
-    elif command -v convert &> /dev/null; then
+    elif command -v convert &>/dev/null; then
         echo "convert"
     else
         log_error "Neither 'magick' (IM7) nor 'convert' (IM6) found. Please install ImageMagick."
         exit $EXIT_DEPENDENCY_MISSING
     fi
+}
+
+add_legend() {
+    local img="$1"
+    local legend_bg="${LEGEND_BG:-white}"
+    local legend_border="${LEGEND_BORDER:-black}"
+    local legend_text="${LEGEND_TEXT:-black}"
+
+    read img_w img_h < <(identify -format "%w %h" "$img")
+
+    local margin=20
+    local legend_w=200
+    local legend_h=100
+    local x1=$((img_w - legend_w - margin))
+    local y1=$((img_h - legend_h - margin))
+    local x2=$((img_w - margin))
+    local y2=$((img_h - margin))
+
+    "$CONVERT_CMD" "$img" \
+        -pointsize 18 -font Helvetica \
+        -fill "$legend_bg" -stroke "$legend_border" -strokewidth 2 \
+        -draw "rectangle $x1,$y1 $x2,$y2" \
+        -fill "$legend_text" -stroke none \
+        -draw "text $((x1 + 10)),$((y1 + 22)) 'Legend:'" \
+        -fill "$COLOR_ADD" \
+        -draw "rectangle $((x1 + 10)),$((y1 + 30)) $((x1 + 35)),$((y1 + 50))" \
+        -fill "$legend_text" \
+        -draw "text $((x1 + 45)),$((y1 + 47)) 'Additions'" \
+        -fill "$COLOR_DELETE" \
+        -draw "rectangle $((x1 + 10)),$((y1 + 55)) $((x1 + 35)),$((y1 + 75))" \
+        -fill "$legend_text" \
+        -draw "text $((x1 + 45)),$((y1 + 72)) 'Deletions'" \
+        "$img"
 }
 
 process_pair() {
@@ -117,6 +151,10 @@ process_pair() {
     composite "$OUT/$base.del.overlay.png" "$q" "$OUT/$base.tmp.png"
     composite "$OUT/$base.add.overlay.png" "$OUT/$base.tmp.png" "$OUT/$base.overlay.png"
     rm -f "$OUT/$base.tmp.png"
+
+    if [[ "${SHOW_LEGEND:-1}" == "1" ]]; then
+        add_legend "$OUT/$base.overlay.png"
+    fi
 
     # Optional side-by-side strip
     if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
@@ -161,11 +199,11 @@ if ! file "$B" | grep -q "PDF"; then
     exit $EXIT_INVALID_PDF
 fi
 
-DPI="${DPI:-300}"      # rasterization DPI
-THRESH="${THRESH:-80}" # 60–90 typical; higher = stricter "ink"
-BLUR="${BLUR:-0x1}"    # 0x0–0x1 to reduce AA noise
-OUT="${OUT:-diff_out}" # output dir
-GENERATE_SIDE_BY_SIDE="${SXS:-1}"        # 1 = also make side-by-side PDF
+DPI="${DPI:-300}"                 # rasterization DPI
+THRESH="${THRESH:-80}"            # 60–90 typical; higher = stricter "ink"
+BLUR="${BLUR:-0x1}"               # 0x0–0x1 to reduce AA noise
+OUT="${OUT:-diff_out}"            # output dir
+GENERATE_SIDE_BY_SIDE="${SXS:-1}" # 1 = also make side-by-side PDF
 
 WHITE_THRESHOLD="95%"
 BINARIZE_THRESHOLD="50%"
@@ -236,9 +274,9 @@ for q in "$RASTER_DIR_B"/*.png; do
 done
 
 # Process pages in parallel using GNU parallel if available, otherwise fall back to serial
-if command -v parallel &> /dev/null; then
-    export -f process_pair
-    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY
+if command -v parallel &>/dev/null; then
+    export -f process_pair add_legend
+    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND
     total_pages=${#pages_to_process[@]}
     log_info "  Processing $total_pages pages in parallel..."
     printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
@@ -246,7 +284,7 @@ else
     total_pages=${#pages_to_process[@]}
     current=0
     for page_info in "${pages_to_process[@]}"; do
-        IFS='|' read -r p q base <<< "$page_info"
+        IFS='|' read -r p q base <<<"$page_info"
         process_pair "$p" "$q" "$base"
         ((current++))
         printf "\r  Progress: %d/%d pages processed" "$current" "$total_pages" >&2
