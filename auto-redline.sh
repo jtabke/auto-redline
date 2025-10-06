@@ -86,7 +86,7 @@ add_legend() {
     local legend_border="${LEGEND_BORDER:-black}"
     local legend_text="${LEGEND_TEXT:-black}"
 
-    read img_w img_h < <(identify -format "%w %h" "$img")
+    read img_w img_h <<< "$(identify -format "%w %h" "$img")"
 
     local margin=20
     local legend_w=200
@@ -110,7 +110,10 @@ add_legend() {
         -draw "rectangle $((x1 + 10)),$((y1 + 55)) $((x1 + 35)),$((y1 + 75))" \
         -fill "$legend_text" \
         -draw "text $((x1 + 45)),$((y1 + 72)) 'Deletions'" \
-        "$img"
+        "${img}.tmp"
+    
+    mv "${img}.tmp" "$img"
+    return 0
 }
 
 process_pair() {
@@ -120,10 +123,10 @@ process_pair() {
 
     # If one side missing, synthesize a white canvas of the other's size
     if [[ ! -f "$p" && -f "$q" ]]; then
-        read w h < <(identify -format "%w %h" "$q")
+        read w h <<< "$(identify -format "%w %h" "$q")"
         "$CONVERT_CMD" -size "${w}x${h}" xc:white "$p"
     elif [[ -f "$p" && ! -f "$q" ]]; then
-        read w h < <(identify -format "%w %h" "$p")
+        read w h <<< "$(identify -format "%w %h" "$p")"
         "$CONVERT_CMD" -size "${w}x${h}" xc:white "$q"
     elif [[ ! -f "$p" && ! -f "$q" ]]; then
         return 0
@@ -244,14 +247,14 @@ for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
     q="$RASTER_DIR_B/$base"
     if [[ -f "$q" ]]; then
-        read w h < <(identify -format "%w %h" "$p")
-        read w2 h2 < <(identify -format "%w %h" "$q")
+        read w h <<< "$(identify -format "%w %h" "$p")"
+        read w2 h2 <<< "$(identify -format "%w %h" "$q")"
         W=$((w > w2 ? w : w2))
         H=$((h > h2 ? h : h2))
         mogrify -background white -gravity northwest -extent "${W}x${H}" "$p"
         mogrify -background white -gravity northwest -extent "${W}x${H}" "$q"
     fi
-    ((current++))
+    current=$((current + 1))
     printf "\r  Progress: %d/%d pages normalized" "$current" "$page_count" >&2
 done
 printf "\n" >&2
@@ -286,7 +289,7 @@ else
     for page_info in "${pages_to_process[@]}"; do
         IFS='|' read -r p q base <<<"$page_info"
         process_pair "$p" "$q" "$base"
-        ((current++))
+        current=$((current + 1))
         printf "\r  Progress: %d/%d pages processed" "$current" "$total_pages" >&2
     done
     printf "\n" >&2
