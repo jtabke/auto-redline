@@ -33,6 +33,7 @@ Environment Variables:
   SXS                  Generate side-by-side PDF: 1=yes, 0=no (default: 1)
   SHOW_LEGEND          Show color legend on overlay: 1=yes, 0=no (default: 1)
   LEGEND_POSITION      Legend position: top-left, top-right, bottom-left, bottom-right (default: bottom-right)
+  OVERLAY_OPACITY      Overlay opacity percentage, 0-100 (default: 100)
 
 Examples:
   $0 old.pdf new.pdf
@@ -179,10 +180,13 @@ process_pair() {
     echo "$add_pixels $del_pixels" > "$OUT/$base.stats.txt"
 
     # Clean & colorize (re-binarize helps; small fuzz aids transparency)
+    local opacity="${OVERLAY_OPACITY:-100}"
     "$CONVERT_CMD" "$OUT/$base.add.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
-        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_ADD" -opaque white -transparent black "$OUT/$base.add.overlay.png"
+        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_ADD" -opaque white -transparent black \
+        -channel A -evaluate multiply "$((opacity))/100" +channel "$OUT/$base.add.overlay.png"
     "$CONVERT_CMD" "$OUT/$base.del.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
-        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_DELETE" -opaque white -transparent black "$OUT/$base.del.overlay.png"
+        -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_DELETE" -opaque white -transparent black \
+        -channel A -evaluate multiply "$((opacity))/100" +channel "$OUT/$base.del.overlay.png"
 
     # Compose overlays on NEW page (B): blue first, red on top (so red wins at overlaps)
     composite "$OUT/$base.del.overlay.png" "$q" "$OUT/$base.tmp.png"
@@ -319,7 +323,7 @@ done
 # Process pages in parallel using GNU parallel if available, otherwise fall back to serial
 if command -v parallel &>/dev/null; then
     export -f process_pair add_legend
-    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND LEGEND_POSITION
+    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND LEGEND_POSITION OVERLAY_OPACITY
     total_pages=${#pages_to_process[@]}
     log_info "  Processing $total_pages pages in parallel..."
     printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
