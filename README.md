@@ -84,13 +84,14 @@ DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./auto-redline.sh old.pdf new
 
 ## Configuration
 
-| Variable | Default  | Description                                                      |
-| -------- | -------- | ---------------------------------------------------------------- |
-| `DPI`    | 300      | Rasterization DPI (higher = better quality, slower)              |
-| `THRESH` | 80       | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
-| `BLUR`   | 0x1      | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2)         |
-| `OUT`    | diff_out | Output directory for all generated files                         |
-| `SXS`    | 1        | Generate side-by-side PDF (1=yes, 0=no)                          |
+| Variable      | Default  | Description                                                      |
+| ------------- | -------- | ---------------------------------------------------------------- |
+| `DPI`         | 300      | Rasterization DPI (higher = better quality, slower)              |
+| `THRESH`      | 80       | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
+| `BLUR`        | 0x1      | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2)         |
+| `OUT`         | diff_out | Output directory for all generated files                         |
+| `SXS`         | 1        | Generate side-by-side PDF (1=yes, 0=no)                          |
+| `SHOW_LEGEND` | 1        | Show color legend on overlay PDF (1=yes, 0=no)                   |
 
 ## Output Files
 
