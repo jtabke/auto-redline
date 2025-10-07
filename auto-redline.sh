@@ -172,6 +172,12 @@ process_pair() {
     "$CONVERT_CMD" "$OUT/$base.Bmask.png" -negate "$OUT/$base.Bnot.png"
     "$CONVERT_CMD" "$OUT/$base.Amask.png" "$OUT/$base.Bnot.png" -compose Multiply -composite "$OUT/$base.del.mask.png"
 
+    # Count changed pixels for statistics
+    local add_pixels del_pixels
+    add_pixels=$(convert "$OUT/$base.add.mask.png" -format "%[fx:mean*w*h]" info:)
+    del_pixels=$(convert "$OUT/$base.del.mask.png" -format "%[fx:mean*w*h]" info:)
+    echo "$add_pixels $del_pixels" > "$OUT/$base.stats.txt"
+
     # Clean & colorize (re-binarize helps; small fuzz aids transparency)
     "$CONVERT_CMD" "$OUT/$base.add.mask.png" -morphology open "$MORPHOLOGY_RADIUS" -morphology close "$MORPHOLOGY_RADIUS" -threshold "$BINARIZE_THRESHOLD" \
         -fuzz "$TRANSPARENCY_FUZZ" -fill "$COLOR_ADD" -opaque white -transparent black "$OUT/$base.add.overlay.png"
@@ -354,6 +360,34 @@ if [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]]; then
 fi
 
 log_info "[5/5] Done."
+
+log_info ""
+log_info "==================== Change Summary ===================="
+total_add_pixels=0
+total_del_pixels=0
+pages_with_changes=0
+
+shopt -s nullglob
+for stats_file in "$OUT"/page-*.stats.txt; do
+    if [[ -f "$stats_file" ]]; then
+        read add_px del_px < "$stats_file"
+        add_int=${add_px%.*}
+        del_int=${del_px%.*}
+        total_add_pixels=$((total_add_pixels + add_int))
+        total_del_pixels=$((total_del_pixels + del_int))
+        if (( add_int > 0 || del_int > 0 )); then
+            pages_with_changes=$((pages_with_changes + 1))
+        fi
+    fi
+done
+
+log_info "Pages processed: $page_count"
+log_info "Pages with changes: $pages_with_changes"
+log_info "Total pixels added (red): $total_add_pixels"
+log_info "Total pixels deleted (blue): $total_del_pixels"
+log_info "========================================================"
+log_info ""
+
 log_info "Outputs:"
 log_info "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
 [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]] && log_info "  - $OUT/side-by-side.pdf            (A | B | overlay)"
@@ -361,6 +395,6 @@ log_info "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
 if [[ "$CLEAN_MODE" == "1" ]]; then
     log_info "[6/6] Cleaning up intermediate files..."
     shopt -s nullglob
-    rm -f "$OUT"/page-*.{Amask,Bmask,Anot,Bnot,add.mask,del.mask,add.overlay,del.overlay,overlay,sxs}.png
+    rm -f "$OUT"/page-*.{Amask,Bmask,Anot,Bnot,add.mask,del.mask,add.overlay,del.overlay,overlay,sxs,stats}.png "$OUT"/page-*.stats.txt
     log_info "  Removed intermediate files, kept only PDFs"
 fi
