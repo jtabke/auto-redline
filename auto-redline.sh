@@ -35,6 +35,7 @@ Environment Variables:
   LEGEND_POSITION      Legend position: top-left, top-right, bottom-left, bottom-right (default: bottom-right)
   OVERLAY_OPACITY      Overlay opacity percentage, 0-100 (default: 100)
   PAGES                Page range to process, e.g., "1-5,10,15-20" (default: all)
+  PARALLEL_JOBS        Number of parallel jobs for GNU parallel (default: auto)
 
 Examples:
   $0 old.pdf new.pdf
@@ -373,7 +374,13 @@ if command -v parallel &>/dev/null; then
     export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND LEGEND_POSITION OVERLAY_OPACITY
     total_pages=${#pages_to_process[@]}
     log_info "  Processing $total_pages pages in parallel..."
-    printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
+    
+    local parallel_opts=("--colsep" '\\|')
+    if [[ -n "${PARALLEL_JOBS:-}" ]]; then
+        parallel_opts+=("-j" "$PARALLEL_JOBS")
+    fi
+    
+    printf '%s\n' "${pages_to_process[@]}" | parallel "${parallel_opts[@]}" process_pair {1} {2} {3}
 else
     total_pages=${#pages_to_process[@]}
     current=0
