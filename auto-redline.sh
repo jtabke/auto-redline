@@ -37,6 +37,7 @@ Environment Variables:
   OVERLAY_OPACITY      Overlay opacity percentage, 0-100 (default: 100)
   PAGES                Page range to process, e.g., "1-5,10,15-20" (default: all)
   PARALLEL_JOBS        Number of parallel jobs for GNU parallel (default: auto)
+  KEEP_INTERMEDIATES   Keep intermediate files: 1=yes, 0=no (default: 0)
 
 Examples:
   $0 old.pdf new.pdf
@@ -131,6 +132,7 @@ add_legend() {
     local legend_text="${LEGEND_TEXT:-black}"
     local legend_pos="${LEGEND_POSITION:-bottom-right}"
 
+    local img_w img_h
     read img_w img_h <<< "$(identify -format "%w %h" "$img")"
 
     local margin=20
@@ -189,6 +191,7 @@ process_pair() {
     local p="$1"
     local q="$2"
     local base="$3"
+    local w h
 
     # If one side missing, synthesize a white canvas of the other's size
     if [[ ! -f "$p" && -f "$q" ]]; then
@@ -215,8 +218,8 @@ process_pair() {
 
     # Count changed pixels for statistics
     local add_pixels del_pixels
-    add_pixels=$(convert "$OUT/$base.add.mask.png" -format "%[fx:mean*w*h]" info:)
-    del_pixels=$(convert "$OUT/$base.del.mask.png" -format "%[fx:mean*w*h]" info:)
+    add_pixels=$("$CONVERT_CMD" "$OUT/$base.add.mask.png" -format "%[fx:mean*w*h]" info:)
+    del_pixels=$("$CONVERT_CMD" "$OUT/$base.del.mask.png" -format "%[fx:mean*w*h]" info:)
     echo "$add_pixels $del_pixels" > "$OUT/$base.stats.txt"
 
     # Clean & colorize (re-binarize helps; small fuzz aids transparency)
@@ -427,22 +430,22 @@ for q in "$RASTER_DIR_B"/*.png; do
     fi
 done
 
-# Process pages in parallel using GNU parallel if available, otherwise fall back to serial
-if command -v parallel &>/dev/null; then
+# Process pages in parallel using GNU parallel if available and beneficial, otherwise fall back to serial
+total_pages=${#pages_to_process[@]}
+if command -v parallel &>/dev/null && [[ $total_pages -gt 1 ]]; then
     export -f process_pair add_legend
     export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND LEGEND_POSITION OVERLAY_OPACITY
-    total_pages=${#pages_to_process[@]}
     log_info "  Processing $total_pages pages in parallel..."
     
-    local parallel_opts=("--colsep" '\\|')
+    parallel_opts=("--colsep" '\|')
     if [[ -n "${PARALLEL_JOBS:-}" ]]; then
         parallel_opts+=("-j" "$PARALLEL_JOBS")
     fi
     
     printf '%s\n' "${pages_to_process[@]}" | parallel "${parallel_opts[@]}" process_pair {1} {2} {3}
 else
-    total_pages=${#pages_to_process[@]}
     current=0
+    log_info "  Processing $total_pages pages sequentially..."
     for page_info in "${pages_to_process[@]}"; do
         IFS='|' read -r p q base <<<"$page_info"
         process_pair "$p" "$q" "$base"
@@ -514,4 +517,9 @@ if [[ "$CLEAN_MODE" == "1" ]]; then
     shopt -s nullglob
     rm -f "$OUT"/page-*.{Amask,Bmask,Anot,Bnot,add.mask,del.mask,add.overlay,del.overlay,overlay,sxs,stats}.png "$OUT"/page-*.stats.txt
     log_info "  Removed intermediate files, kept only PDFs"
+elif [[ "${KEEP_INTERMEDIATES:-0}" == "0" ]]; then
+    log_info "[6/6] Cleaning up intermediate files (set KEEP_INTERMEDIATES=1 to preserve)..."
+    shopt -s nullglob
+    rm -f "$OUT"/page-*.{Amask,Bmask,Anot,Bnot,add.mask,del.mask,add.overlay,del.overlay,stats}.png "$OUT"/page-*.stats.txt
+    log_info "  Removed processing intermediates, kept overlay and side-by-side images"
 fi
