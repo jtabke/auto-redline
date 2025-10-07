@@ -298,6 +298,28 @@ BLUR="${BLUR:-0x1}"
 OUT="${OUT:-diff_out}"
 GENERATE_SIDE_BY_SIDE="${SXS:-1}"
 
+if [[ ! "$DPI" =~ ^[0-9]+$ ]] || (( DPI < 72 || DPI > 1200 )); then
+    log_error "DPI must be a number between 72 and 1200 (got: $DPI)"
+    exit $EXIT_INVALID_ARGS
+fi
+
+if [[ ! "$THRESH" =~ ^[0-9]+$ ]] || (( THRESH < 0 || THRESH > 100 )); then
+    log_error "THRESH must be a number between 0 and 100 (got: $THRESH)"
+    exit $EXIT_INVALID_ARGS
+fi
+
+if [[ ! "$BLUR" =~ ^[0-9]+x[0-9]+(\.[0-9]+)?$ ]]; then
+    log_error "BLUR must be in format NxN or NxN.N (got: $BLUR)"
+    exit $EXIT_INVALID_ARGS
+fi
+
+if [[ -n "${OVERLAY_OPACITY:-}" ]]; then
+    if [[ ! "$OVERLAY_OPACITY" =~ ^[0-9]+$ ]] || (( OVERLAY_OPACITY < 0 || OVERLAY_OPACITY > 100 )); then
+        log_error "OVERLAY_OPACITY must be a number between 0 and 100 (got: $OVERLAY_OPACITY)"
+        exit $EXIT_INVALID_ARGS
+    fi
+fi
+
 WHITE_THRESHOLD="95%"
 BINARIZE_THRESHOLD="50%"
 MORPHOLOGY_RADIUS="disk:1"
