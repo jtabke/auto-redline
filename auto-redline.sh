@@ -34,6 +34,7 @@ Environment Variables:
   SHOW_LEGEND          Show color legend on overlay: 1=yes, 0=no (default: 1)
   LEGEND_POSITION      Legend position: top-left, top-right, bottom-left, bottom-right (default: bottom-right)
   OVERLAY_OPACITY      Overlay opacity percentage, 0-100 (default: 100)
+  PAGES                Page range to process, e.g., "1-5,10,15-20" (default: all)
 
 Examples:
   $0 old.pdf new.pdf
@@ -82,6 +83,43 @@ detect_imagemagick_version() {
         log_error "Neither 'magick' (IM7) nor 'convert' (IM6) found. Please install ImageMagick."
         exit $EXIT_DEPENDENCY_MISSING
     fi
+}
+
+parse_page_ranges() {
+    local ranges="$1"
+    local -a page_nums=()
+    
+    IFS=',' read -ra range_parts <<< "$ranges"
+    for part in "${range_parts[@]}"; do
+        if [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            local start="${BASH_REMATCH[1]}"
+            local end="${BASH_REMATCH[2]}"
+            for ((i=start; i<=end; i++)); do
+                page_nums+=("$i")
+            done
+        elif [[ "$part" =~ ^[0-9]+$ ]]; then
+            page_nums+=("$part")
+        fi
+    done
+    
+    printf '%s\n' "${page_nums[@]}" | sort -nu
+}
+
+should_process_page() {
+    local page_num="$1"
+    local page_ranges="$2"
+    
+    if [[ -z "$page_ranges" ]]; then
+        return 0
+    fi
+    
+    while IFS= read -r allowed_page; do
+        if [[ "$page_num" == "$allowed_page" ]]; then
+            return 0
+        fi
+    done < <(parse_page_ranges "$page_ranges")
+    
+    return 1
 }
 
 add_legend() {
@@ -307,16 +345,25 @@ log_info "[3/5] Computing directional diffs (red=new, blue=removed)…"
 
 # Build list of all pages to process
 pages_to_process=()
+page_num=0
 for p in "$RASTER_DIR_A"/*.png; do
     base=$(basename "$p")
+    page_num=$((page_num + 1))
     q="$RASTER_DIR_B/$base"
-    pages_to_process+=("$p|$q|$base")
+    if should_process_page "$page_num" "${PAGES:-}"; then
+        pages_to_process+=("$p|$q|$base")
+    fi
 done
+
+page_num=0
 for q in "$RASTER_DIR_B"/*.png; do
     base=$(basename "$q")
+    page_num=$((page_num + 1))
     p="$RASTER_DIR_A/$base"
     if [[ ! -f "$p" ]]; then
-        pages_to_process+=("$p|$q|$base")
+        if should_process_page "$page_num" "${PAGES:-}"; then
+            pages_to_process+=("$p|$q|$base")
+        fi
     fi
 done
 
