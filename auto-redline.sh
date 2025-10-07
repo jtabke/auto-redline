@@ -24,6 +24,7 @@ Options:
   -h, --help           Show this help message and exit
   -v, --version        Show version information and exit
   -c, --clean          Remove intermediate files, keep only final PDFs
+  -d, --dry-run        Show configuration and exit without processing
 
 Environment Variables:
   DPI                  Rasterization DPI (default: 300)
@@ -257,8 +258,14 @@ if [[ "${1:-}" == "-v" || "${1:-}" == "--version" ]]; then
 fi
 
 CLEAN_MODE=0
+DRY_RUN=0
 if [[ "${1:-}" == "-c" || "${1:-}" == "--clean" ]]; then
     CLEAN_MODE=1
+    shift
+fi
+
+if [[ "${1:-}" == "-d" || "${1:-}" == "--dry-run" ]]; then
+    DRY_RUN=1
     shift
 fi
 
@@ -285,11 +292,11 @@ if ! file "$B" | grep -q "PDF"; then
     exit $EXIT_INVALID_PDF
 fi
 
-DPI="${DPI:-300}"                 # rasterization DPI
-THRESH="${THRESH:-80}"            # 60–90 typical; higher = stricter "ink"
-BLUR="${BLUR:-0x1}"               # 0x0–0x1 to reduce AA noise
-OUT="${OUT:-diff_out}"            # output dir
-GENERATE_SIDE_BY_SIDE="${SXS:-1}" # 1 = also make side-by-side PDF
+DPI="${DPI:-300}"
+THRESH="${THRESH:-80}"
+BLUR="${BLUR:-0x1}"
+OUT="${OUT:-diff_out}"
+GENERATE_SIDE_BY_SIDE="${SXS:-1}"
 
 WHITE_THRESHOLD="95%"
 BINARIZE_THRESHOLD="50%"
@@ -298,6 +305,36 @@ TRANSPARENCY_FUZZ="1%"
 COLOR_ADD="red"
 COLOR_DELETE="blue"
 MONTAGE_GEOMETRY="+12+12"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+    log_info "==================== Dry Run Configuration ===================="
+    log_info "Input Files:"
+    log_info "  A: $A"
+    log_info "  B: $B"
+    log_info ""
+    log_info "Processing Settings:"
+    log_info "  DPI:                 $DPI"
+    log_info "  THRESH:              $THRESH"
+    log_info "  BLUR:                $BLUR"
+    log_info "  OUT:                 $OUT"
+    log_info "  SXS:                 $GENERATE_SIDE_BY_SIDE"
+    log_info "  SHOW_LEGEND:         ${SHOW_LEGEND:-1}"
+    log_info "  LEGEND_POSITION:     ${LEGEND_POSITION:-bottom-right}"
+    log_info "  OVERLAY_OPACITY:     ${OVERLAY_OPACITY:-100}"
+    log_info "  PAGES:               ${PAGES:-all}"
+    log_info "  PARALLEL_JOBS:       ${PARALLEL_JOBS:-auto}"
+    log_info "  CLEAN_MODE:          $CLEAN_MODE"
+    log_info ""
+    log_info "Internal Settings:"
+    log_info "  WHITE_THRESHOLD:     $WHITE_THRESHOLD"
+    log_info "  BINARIZE_THRESHOLD:  $BINARIZE_THRESHOLD"
+    log_info "  MORPHOLOGY_RADIUS:   $MORPHOLOGY_RADIUS"
+    log_info "  TRANSPARENCY_FUZZ:   $TRANSPARENCY_FUZZ"
+    log_info "  COLOR_ADD:           $COLOR_ADD"
+    log_info "  COLOR_DELETE:        $COLOR_DELETE"
+    log_info "==============================================================="
+    exit $EXIT_SUCCESS
+fi
 
 CONVERT_CMD=$(detect_imagemagick_version)
 
