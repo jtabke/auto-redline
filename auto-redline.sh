@@ -23,6 +23,7 @@ Arguments:
 Options:
   -h, --help           Show this help message and exit
   -v, --version        Show version information and exit
+  -c, --clean          Remove intermediate files, keep only final PDFs
 
 Environment Variables:
   DPI                  Rasterization DPI (default: 300)
@@ -36,6 +37,7 @@ Examples:
   $0 old.pdf new.pdf
   DPI=150 THRESH=70 $0 old.pdf new.pdf
   OUT=my_diff SXS=0 $0 old.pdf new.pdf
+  $0 --clean old.pdf new.pdf
 
 Output:
   overlay.diff.pdf      Modified PDF with red (additions) and blue (deletions)
@@ -177,6 +179,12 @@ fi
 if [[ "${1:-}" == "-v" || "${1:-}" == "--version" ]]; then
     show_version
     exit $EXIT_SUCCESS
+fi
+
+CLEAN_MODE=0
+if [[ "${1:-}" == "-c" || "${1:-}" == "--clean" ]]; then
+    CLEAN_MODE=1
+    shift
 fi
 
 A="${1:?usage: $0 A.pdf B.pdf}"
@@ -323,3 +331,10 @@ log_info "[5/5] Done."
 log_info "Outputs:"
 log_info "  - $OUT/overlay.diff.pdf            (B with red=new, blue=removed)"
 [[ "$GENERATE_SIDE_BY_SIDE" == "1" ]] && log_info "  - $OUT/side-by-side.pdf            (A | B | overlay)"
+
+if [[ "$CLEAN_MODE" == "1" ]]; then
+    log_info "[6/6] Cleaning up intermediate files..."
+    shopt -s nullglob
+    rm -f "$OUT"/page-*.{Amask,Bmask,Anot,Bnot,add.mask,del.mask,add.overlay,del.overlay,overlay,sxs}.png
+    log_info "  Removed intermediate files, kept only PDFs"
+fi
