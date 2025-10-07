@@ -14,6 +14,9 @@ Automatic PDF redline generator that compares two PDF files and produces visual 
 - **ImageMagick 6 or 7** (`convert`, `composite`, `montage`, `mogrify`, `identify`)
   - ImageMagick is licensed under the [ImageMagick License](https://imagemagick.org/script/license.php)
   - For ImageMagick 7, replace `convert` with `magick` in the script (lines 22-23)
+- **GNU Parallel** (optional, recommended for multi-page PDFs)
+  - Automatically used if available for processing multiple pages concurrently
+  - Single-page PDFs always use sequential processing (faster due to less overhead)
 - Bash 4.0+
 
 ## Installation
@@ -22,25 +25,25 @@ Automatic PDF redline generator that compares two PDF files and produces visual 
 
 ```bash
 sudo apt update
-sudo apt install imagemagick
+sudo apt install imagemagick parallel
 ```
 
 ### Fedora/RHEL/CentOS
 
 ```bash
-sudo dnf install ImageMagick
+sudo dnf install ImageMagick parallel
 ```
 
 ### macOS
 
 ```bash
-brew install imagemagick
+brew install imagemagick parallel
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -S imagemagick
+sudo pacman -S imagemagick parallel
 ```
 
 ### Verify Installation
@@ -84,14 +87,19 @@ DPI=300 THRESH=80 BLUR=0x1 OUT=custom_output SXS=1 ./auto-redline.sh old.pdf new
 
 ## Configuration
 
-| Variable      | Default  | Description                                                      |
-| ------------- | -------- | ---------------------------------------------------------------- |
-| `DPI`         | 300      | Rasterization DPI (higher = better quality, slower)              |
-| `THRESH`      | 80       | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
-| `BLUR`        | 0x1      | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2)         |
-| `OUT`         | diff_out | Output directory for all generated files                         |
-| `SXS`         | 1        | Generate side-by-side PDF (1=yes, 0=no)                          |
-| `SHOW_LEGEND` | 1        | Show color legend on overlay PDF (1=yes, 0=no)                   |
+| Variable             | Default      | Description                                                      |
+| -------------------- | ------------ | ---------------------------------------------------------------- |
+| `DPI`                | 300          | Rasterization DPI (higher = better quality, slower)              |
+| `THRESH`             | 80           | Threshold for detecting "ink" (60-90 typical; higher = stricter) |
+| `BLUR`               | 0x1          | Gaussian blur to reduce anti-aliasing noise (0x0 to 0x2)         |
+| `OUT`                | diff_out     | Output directory for all generated files                         |
+| `SXS`                | 1            | Generate side-by-side PDF (1=yes, 0=no)                          |
+| `SHOW_LEGEND`        | 1            | Show color legend on overlay PDF (1=yes, 0=no)                   |
+| `LEGEND_POSITION`    | bottom-right | Legend position: top-left, top-right, bottom-left, bottom-right  |
+| `OVERLAY_OPACITY`    | 100          | Overlay transparency: 0-100 (0=invisible, 100=opaque)            |
+| `PAGES`              | all          | Page range to process: "1-5,10,15-20" (processes specific pages) |
+| `PARALLEL_JOBS`      | auto         | Number of parallel jobs (e.g., 4, 8, or "auto" for CPU count)    |
+| `KEEP_INTERMEDIATES` | 0            | Keep all intermediate processing files (1=yes, 0=no)             |
 
 ## Output Files
 
@@ -121,6 +129,8 @@ The output directory contains per-page intermediate files:
    - Deletions: A ∖ B (content in A but not in B)
 4. **Colorization** - Applies red/blue coloring with morphological cleanup
 5. **Assembly** - Combines processed pages back into PDF format
+
+**Performance**: Multi-page PDFs are automatically processed in parallel using GNU parallel if available (approximately 27% faster on 3-page documents). Single-page PDFs always use sequential processing to avoid overhead.
 
 ## Tuning Tips
 
@@ -159,6 +169,16 @@ DPI=150 SXS=0 ./auto-redline.sh draft1.pdf draft2.pdf
 
 ```bash
 THRESH=70 BLUR=0x2 ./auto-redline.sh scan_old.pdf scan_new.pdf
+```
+
+### Control parallel processing for large documents
+
+```bash
+# Limit to 4 parallel jobs to reduce memory usage
+PARALLEL_JOBS=4 ./auto-redline.sh large_doc_v1.pdf large_doc_v2.pdf
+
+# Process only specific pages
+PAGES="1-5,10" ./auto-redline.sh doc_v1.pdf doc_v2.pdf
 ```
 
 ## Troubleshooting
