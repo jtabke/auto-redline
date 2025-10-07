@@ -32,6 +32,7 @@ Environment Variables:
   OUT                  Output directory (default: diff_out)
   SXS                  Generate side-by-side PDF: 1=yes, 0=no (default: 1)
   SHOW_LEGEND          Show color legend on overlay: 1=yes, 0=no (default: 1)
+  LEGEND_POSITION      Legend position: top-left, top-right, bottom-left, bottom-right (default: bottom-right)
 
 Examples:
   $0 old.pdf new.pdf
@@ -87,16 +88,41 @@ add_legend() {
     local legend_bg="${LEGEND_BG:-white}"
     local legend_border="${LEGEND_BORDER:-black}"
     local legend_text="${LEGEND_TEXT:-black}"
+    local legend_pos="${LEGEND_POSITION:-bottom-right}"
 
     read img_w img_h <<< "$(identify -format "%w %h" "$img")"
 
     local margin=20
     local legend_w=200
     local legend_h=100
-    local x1=$((img_w - legend_w - margin))
-    local y1=$((img_h - legend_h - margin))
-    local x2=$((img_w - margin))
-    local y2=$((img_h - margin))
+    
+    local x1 y1 x2 y2
+    case "$legend_pos" in
+        top-left)
+            x1=$margin
+            y1=$margin
+            x2=$((margin + legend_w))
+            y2=$((margin + legend_h))
+            ;;
+        top-right)
+            x1=$((img_w - legend_w - margin))
+            y1=$margin
+            x2=$((img_w - margin))
+            y2=$((margin + legend_h))
+            ;;
+        bottom-left)
+            x1=$margin
+            y1=$((img_h - legend_h - margin))
+            x2=$((margin + legend_w))
+            y2=$((img_h - margin))
+            ;;
+        bottom-right|*)
+            x1=$((img_w - legend_w - margin))
+            y1=$((img_h - legend_h - margin))
+            x2=$((img_w - margin))
+            y2=$((img_h - margin))
+            ;;
+    esac
 
     "$CONVERT_CMD" "$img" \
         -pointsize 18 -font Helvetica \
@@ -287,7 +313,7 @@ done
 # Process pages in parallel using GNU parallel if available, otherwise fall back to serial
 if command -v parallel &>/dev/null; then
     export -f process_pair add_legend
-    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND
+    export CONVERT_CMD OUT WHITE_THRESHOLD BLUR THRESH BINARIZE_THRESHOLD MORPHOLOGY_RADIUS TRANSPARENCY_FUZZ COLOR_ADD COLOR_DELETE GENERATE_SIDE_BY_SIDE MONTAGE_GEOMETRY SHOW_LEGEND LEGEND_POSITION
     total_pages=${#pages_to_process[@]}
     log_info "  Processing $total_pages pages in parallel..."
     printf '%s\n' "${pages_to_process[@]}" | parallel --colsep '\\|' process_pair {1} {2} {3}
